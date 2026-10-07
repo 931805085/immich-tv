@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "dev.immichtv"
+    namespace = "com.zch.immich.tv"
     compileSdk = 36
 
     defaultConfig {

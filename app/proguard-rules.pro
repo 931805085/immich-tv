@@ -5,9 +5,9 @@
 -keepattributes *Annotation*
 
 # kotlinx.serialization
--keepclassmembers class dev.immichtv.api.** {
+-keepclassmembers class com.zch.immich.tv.api.** {
     *** Companion;
 }
--keepclasseswithmembers class dev.immichtv.api.** {
+-keepclasseswithmembers class com.zch.immich.tv.api.** {
     kotlinx.serialization.KSerializer serializer(...);
 }

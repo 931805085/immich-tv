@@ -2,18 +2,18 @@
 
 用 **Kotlin + Jetpack Compose for TV** 从零实现，通过 Immich 的**公开共享链接**在电视上看照片和视频——不需要账号 / API key，家里人用手机扫码即可完成连接。
 
-> 可参考的成熟开源实现：`giejay/Immich-Android-TV`（GPL-3.0，仅作 API/权限参考，不抄代码）。
+> **个人自用项目**：最初为满足作者自家「在电视上看家庭照片/视频」的需求而写——家人手机扫二维码即可连上电视，浏览 Immich 里的共享相册，功能够用就好。现已以 **MIT 许可**开源分享，欢迎按需使用、修改和分发（见 [LICENSE](LICENSE)）。
 
 ## 技术栈
 
-| 层   | 选型                                                                                  |
-| ---- | ------------------------------------------------------------------------------------- |
-| UI   | Jetpack Compose for TV（`androidx.tv:tv-material:1.1.0` + `tv-foundation:1.0.0`） |
-| 图片 | Coil 3（磁盘缓存按可用空间自适应 64MB~1GB + 内存 40%，同主机并发抬到 10）                          |
-| 视频 | Media3 ExoPlayer + `PlayerView`（等比缩放、byte-range 边下边播、磁盘缓存 128MB~2GB + 下一视频预读）   |
-| HTTP | Retrofit + OkHttp + kotlinx.serialization                                             |
-| 连接 | 电视内置极简 HTTP 服务器（`ServerSocket` 手写）+ 二维码，手机扫码回传共享链接       |
-| 诊断 | 崩溃写盘 + 内置服务器`GET /debug` 可读上次崩溃栈（电视上看不到 logcat）             |
+| 层   | 选型                                                                                                 |
+| ---- | ---------------------------------------------------------------------------------------------------- |
+| UI   | Jetpack Compose for TV（`androidx.tv:tv-material:1.1.0` + `tv-foundation:1.0.0`）                |
+| 图片 | Coil 3（磁盘缓存按可用空间自适应 64MB~1GB + 内存 40%，同主机并发抬到 10）                            |
+| 视频 | Media3 ExoPlayer +`PlayerView`（等比缩放、byte-range 边下边播、磁盘缓存 128MB~2GB + 下一视频预读） |
+| HTTP | Retrofit + OkHttp + kotlinx.serialization                                                            |
+| 连接 | 电视内置极简 HTTP 服务器（`ServerSocket` 手写）+ 二维码，手机扫码回传共享链接                      |
+| 诊断 | 崩溃写盘 + 内置服务器`GET /debug` 可读上次崩溃栈（电视上看不到 logcat）                            |
 
 ## 环境要求
 
@@ -71,7 +71,7 @@
 ## 目录结构
 
 ```
-app/src/main/java/dev/immichtv/
+app/src/main/java/com/zch/immich/tv/
 ├── MainActivity.kt          # 全屏 + KeyBus 按键拦截入口
 ├── api/
 │   ├── ImmichApi.kt         # DTO + Retrofit 接口（shared-links / timeline）
@@ -119,11 +119,12 @@ app/src/main/java/dev/immichtv/
 
 **下一步候选**（按价值排序）：
 
-- [ ] 播放器增强：快进快退、缓冲指示、控制条自动隐藏、记住每个视频的播放位置
-- [ ] 幻灯片/屏保模式：空闲自动全屏轮播（参考 giejay 特性）
 - [ ] 过期共享链接预警：临近/已过期时在首页明确提示
 - [ ] 设置页：幻灯片间隔、清晰度档位、清缓存、诊断信息 UI
-- [ ] 相册多选切换 / 账号 + API Key 登录（解锁收藏、搜索、人脸、回忆视图和原图下载）
 - [ ] 网络状态监听（权限已声明，尚未使用）与离线提示
 - [ ] EncryptedSharedPreferences 加密存储历史链接
 - [ ] 内置接收服务器加简单鉴权（目前局域网内任何设备都能 POST 换相册）
+
+## 许可证
+
+[MIT](LICENSE) © 2026 zch
