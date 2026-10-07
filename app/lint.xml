@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- media3 的 @UnstableApi（Java 声明的 opt-in marker）已通过代码里的 @OptIn 标注；
+         lint 对 Java marker 的 kotlin.OptIn 支持有限，这里按 media3 官方建议做项目级 opt-in，
+         消除 UnsafeOptInUsageError 误报：https://developer.android.com/media/media3/lint |
+         参考 media3 文档中 OptIn 的说明 -->
+    <issue id="UnsafeOptInUsageError">
+        <option name="opt-in" value="androidx.media3.common.util.UnstableApi" />
+    </issue>
+
+    <!-- 占位图标是 320dp 矢量（同时充当 TV banner，banner 规范要求 320x180），暂时接受 VectorRaster 提示 -->
+    <issue id="VectorRaster" severity="ignore" />
+</lint>

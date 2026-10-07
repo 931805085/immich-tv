@@ -1,0 +1,62 @@
+# 本项目 .gitignore —— ImmichTV（Android TV 应用）
+
+# ---------- Gradle / 构建产物 ----------
+.gradle/
+build/
+**/build/
+captures/
+*.log
+
+# ---------- 本地与机器相关的配置（不应入库） ----------
+local.properties            # 含本机 Android SDK 路径
+*.properties.bak
+
+# ---------- Android Studio / IntelliJ IDEA ----------
+.idea/
+*.iml
+.idea/caches/
+.idea/workspace.xml          # 本地工作区状态
+.idea/libraries/
+.idea/modules.xml
+.idea/jarRepositories.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/gradle.xml
+.idea/misc.xml
+.DS_Store
+
+# ---------- Kotlin ----------
+.kotlin/
+.kotlin/**/sessions/
+
+# ---------- 签名 / 密钥（安全敏感，切勿提交） ----------
+*.jks
+*.keystore
+*.p12
+key.properties
+keystore.properties
+signing.properties
+
+# ---------- 各类生成/临时文件 ----------
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.jar           # 但保留 gradle-wrapper.jar（在 gradle/wrapper/ 下）
+!gradle/wrapper/gradle-wrapper.jar
+*.tmp
+*.bak
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+Desktop.ini
+*~
+
+# ---------- 测试/覆盖率 ----------
+*.test
+*.results.txt
+.ec
+htmlcov/
+coverage/

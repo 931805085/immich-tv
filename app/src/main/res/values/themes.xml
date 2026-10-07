@@ -1,0 +1,11 @@
+<resources>
+    <!--
+      不要用 android:windowFullscreen：那是旧版全屏标志，在 Android 15+（targetSdk 36）
+      上会和系统强制的 edge-to-edge 冲突。真正的全屏用
+      MainActivity 里的 WindowCompat.setDecorFitsSystemWindows(window, false) 处理。
+    -->
+    <style name="Theme.ImmichTV" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:colorBackground">#101014</item>
+    </style>
+</resources>
