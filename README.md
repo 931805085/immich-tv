@@ -130,11 +130,11 @@ app/src/main/java/com/zch/immich/tv/
    | Secret | 值 |
    | ------ | -- |
    | `KEYSTORE_BASE64` | release.jks 的 base64（Linux/macOS：`base64 -w0 release.jks`；Windows PowerShell：`[Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks"))`） |
-   | `KEYSTORE_PASSWORD` | keystore 文件口令（keytool 的 `-storepass`，用于打开 `.jks` 文件本身） |
+   | `KEYSTORE_PASSWORD` | keystore 口令（keytool 的 `-storepass`，唯一必需的口令） |
    | `KEY_ALIAS` | 上面 `-alias` 用的别名 |
-   | `KEY_PASSWORD` | 私钥条目口令（keytool 的 `-keypass`）。创建 keystore 时若在 `Enter key password (RETURN if same as keystore password)` 提示处直接回车，两道口令即相同，它和 `KEYSTORE_PASSWORD` 填同一个值即可 |
+   | `KEY_PASSWORD` | **可留空**。JDK 9+ 默认 PKCS12 keystore 只有一道口令（keytool 生成时不会再单独询问 keypass），留空自动等同 `KEYSTORE_PASSWORD` |
 
-   > 区分：`KEYSTORE_PASSWORD` 是开 keystore 文件的口令，`KEY_PASSWORD` 是取其中私钥的口令，可同可不同。签名时报 `Keystore was tampered with, or password was incorrect` 是前者填错；报 `Invalid key password` 是后者没对上该 alias。
+   > 旧版 JKS 格式才有「storepass / keypass」两道口令；现代 JDK 生成的 keystore 一道就够。签名时报 `Keystore was tampered with, or password was incorrect` 基本是 `KEYSTORE_PASSWORD` 或 base64 内容有问题。
 
 3. 之后每次 push 到 `main` 自动出 APK（Actions 页面可下载）。**密钥只放 Secrets、别提交进仓库**；本地没配环境变量时 `assembleRelease` 会报缺签名信息（预期行为），日常开发用 `assembleDebug` 即可。
 

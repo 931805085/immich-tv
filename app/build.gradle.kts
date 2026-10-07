@@ -27,15 +27,19 @@ android {
             // 正式签名：keystore 以 base64 形式经环境变量注入（GitHub Actions Secrets）。
             // 本地不设这些变量时该配置为空——assembleRelease 会报缺 storeFile，这是预期行为；
             // assembleDebug 不受影响。
-            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")
+            val keystoreBase64 = System.getenv("KEYSTORE_BASE64")?.takeIf { it.isNotBlank() }
             if (keystoreBase64 != null) {
+                val storePass = System.getenv("KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+                val alias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() }
+                // JDK 9+ 默认 PKCS12 keystore 只有一道口令：KEY_PASSWORD 可留空，默认与 KEYSTORE_PASSWORD 相同
+                val keyPass = System.getenv("KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: storePass
                 val keystoreFile = layout.buildDirectory.file("keystore/release.jks").get().asFile
                 keystoreFile.parentFile?.mkdirs()
-                keystoreFile.writeBytes(Base64.getDecoder().decode(keystoreBase64))
+                keystoreFile.writeBytes(Base64.getMimeDecoder().decode(keystoreBase64))
                 storeFile = keystoreFile
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+                storePassword = storePass
+                keyAlias = alias
+                keyPassword = keyPass
                 println("release 签名：已从环境变量加载 keystore")
             }
         }
