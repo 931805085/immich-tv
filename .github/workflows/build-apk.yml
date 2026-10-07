@@ -31,10 +31,12 @@ jobs:
           java-version: "17"
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        # v4+ 不再安装已废弃的 tools 包（Google 2026-09 起停止提供，v3 会因此报
+        # "Failed to find package 'tools'"）。显式 packages 装平台 36 + build-tools，
+        # 其余缺的组件 AGP 会自动下载（licenses 由该 action 接受）。
+        uses: android-actions/setup-android@v4
         with:
-          api-level: "36"
-          # build-tools 缺的话 AGP 会自动下载（licenses 已在此步接受）
+          packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Set up Gradle（缓存依赖）
         uses: gradle/actions/setup-gradle@v4
