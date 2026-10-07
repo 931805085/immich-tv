@@ -113,6 +113,31 @@ app/src/main/java/com/zch/immich/tv/
 - `ParseShareLinkTest`（8）：共享链接解析边界（带逗号、缺协议、带 query、`/api/share/` 前缀等）；
 - `TimelineBucketAssetsDtoTest`（4）：列式 JSON 反序列化回归（曾经因 `ratio` 类型声明错误导致整相册加载失败）。
 
+## 自动构建（GitHub Actions）
+
+推代码到 `main` 后，GitHub 会自动编译并生成正式签名的 release APK（公开仓库用 Actions 免费）；打 `v*` 标签（如 `v1.0.0`）时会自动发布带 APK 的 GitHub Release。PR 只构建 debug 包做基本校验。
+
+配置签名（一次性）：
+
+1. 生成 keystore：
+
+   ```bash
+   keytool -genkey -v -keystore release.jks -alias immich-tv -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+2. 把 keystore 转成 base64，并到仓库 **Settings → Secrets and variables → Actions** 添加 4 个 secret：
+
+   | Secret | 值 |
+   | ------ | -- |
+   | `KEYSTORE_BASE64` | release.jks 的 base64（Linux/macOS：`base64 -w0 release.jks`；Windows PowerShell：`[Convert]::ToBase64String([IO.File]::ReadAllBytes("release.jks"))`） |
+   | `KEYSTORE_PASSWORD` | keystore 文件口令（keytool 的 `-storepass`，用于打开 `.jks` 文件本身） |
+   | `KEY_ALIAS` | 上面 `-alias` 用的别名 |
+   | `KEY_PASSWORD` | 私钥条目口令（keytool 的 `-keypass`）。创建 keystore 时若在 `Enter key password (RETURN if same as keystore password)` 提示处直接回车，两道口令即相同，它和 `KEYSTORE_PASSWORD` 填同一个值即可 |
+
+   > 区分：`KEYSTORE_PASSWORD` 是开 keystore 文件的口令，`KEY_PASSWORD` 是取其中私钥的口令，可同可不同。签名时报 `Keystore was tampered with, or password was incorrect` 是前者填错；报 `Invalid key password` 是后者没对上该 alias。
+
+3. 之后每次 push 到 `main` 自动出 APK（Actions 页面可下载）。**密钥只放 Secrets、别提交进仓库**；本地没配环境变量时 `assembleRelease` 会报缺签名信息（预期行为），日常开发用 `assembleDebug` 即可。
+
 ## 路线图 / 已知缺口
 
 **已完成**：扫码连接、按天时间线 + 年份跳转、流式加载 + 重试、全屏幻灯片、图文混排视频播放、崩溃诊断、返回定位。

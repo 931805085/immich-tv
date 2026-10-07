@@ -1,0 +1,72 @@
+name: Build APK
+
+# 触发时机：
+#   - push 到 main：构建 release APK 并上传为 Actions artifact
+#   - 打 v* 标签（如 v1.0.0）：构建 release APK 并自动发布 GitHub Release
+#   - pull_request 到 main：只构建 debug APK 做检查（不涉及签名 Secrets）
+#   - 手动触发（workflow_dispatch）：仓库 Actions 页面点 Run workflow
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+# 允许用 GITHUB_TOKEN 创建 GitHub Release
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          api-level: "36"
+          # build-tools 缺的话 AGP 会自动下载（licenses 已在此步接受）
+
+      - name: Set up Gradle（缓存依赖）
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build APK
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR 不触发签名，只编 debug 验证
+            ./gradlew :app:assembleDebug --no-daemon
+          else
+            # push / tag / 手动触发：正式签名 release（需要 4 个 Secrets）
+            ./gradlew :app:assembleRelease --no-daemon
+          fi
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: immich-tv-apk
+          # PR 时只有 debug、push/tag 时只有 release，匹配不到的类型自动跳过（warn）
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
+
+      - name: Publish GitHub Release（仅打 v* 标签时）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/outputs/apk/release/*.apk
+          generate_release_notes: true
