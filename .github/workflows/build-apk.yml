@@ -1,21 +1,18 @@
-name: Build APK
-
+# 构建 APK（构建/校验用，不做发布。发布走 release.yml 一键流程）
+#
 # 触发时机：
-#   - push 到 main：构建 release APK 并上传为 Actions artifact
-#   - 打 v* 标签（如 v1.0.0）：构建 release APK 并自动发布 GitHub Release
-#   - pull_request 到 main：只构建 debug APK 做检查（不涉及签名 Secrets）
+#   - push 到 main：构建正式签名 release APK 并上传为 Actions artifact
+#   - pull_request 到 main：只构建 debug APK 做基本校验（不涉及签名 Secrets）
 #   - 手动触发（workflow_dispatch）：仓库 Actions 页面点 Run workflow
+#
+# 发新版请用「一键发布」：.github/workflows/release.yml（填版本号即可，
+# 会自动打 v* 标签、构建、把 APK 直接挂到 GitHub Release）。
 on:
   push:
     branches: ["main"]
-    tags: ["v*"]
   pull_request:
     branches: ["main"]
   workflow_dispatch:
-
-# 允许用 GITHUB_TOKEN 创建 GitHub Release
-permissions:
-  contents: write
 
 jobs:
   build:
@@ -52,7 +49,7 @@ jobs:
             # PR 不触发签名，只编 debug 验证
             ./gradlew :app:assembleDebug --no-daemon
           else
-            # push / tag / 手动触发：正式签名 release（需要 4 个 Secrets）
+            # push / 手动触发：正式签名 release（需要 4 个 Secrets）
             ./gradlew :app:assembleRelease --no-daemon
           fi
 
@@ -60,15 +57,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: immich-tv-apk
-          # PR 时只有 debug、push/tag 时只有 release，匹配不到的类型自动跳过（warn）
+          # PR 时只有 debug、push 时只有 release，匹配不到的类型自动跳过（warn）
           path: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
           if-no-files-found: warn
-
-      - name: Publish GitHub Release（仅打 v* 标签时）
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: app/build/outputs/apk/release/*.apk
-          generate_release_notes: true

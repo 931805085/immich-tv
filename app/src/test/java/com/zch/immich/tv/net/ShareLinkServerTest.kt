@@ -1,10 +1,12 @@
 package com.zch.immich.tv.net
 
+import com.zch.immich.tv.api.ImmichClient
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -71,6 +73,34 @@ class ShareLinkServerTest {
     }
 
     @Test
+    fun `input page does not leak the current share link`() {
+        // 模拟电视上已配置当前链接（带敏感的 share key）
+        ImmichClient.serverUrl = "https://p.example.com:9070"
+        ImmichClient.shareKey = "SuperSecretKey123456"
+        try {
+            val (code, html) = get("/")
+            assertEquals(200, code)
+            // 输入页不应把当前链接/密钥预填进表单，避免泄露给任意扫码的人
+            assertFalse(html.contains("SuperSecretKey123456"))
+            assertFalse(html.contains("p.example.com"))
+        } finally {
+            ImmichClient.serverUrl = ""
+            ImmichClient.shareKey = ""
+        }
+    }
+
+    @Test
+    fun `input page documents the curl command line fallback`() {
+        val (code, html) = get("/")
+        assertEquals(200, code)
+        assertTrue(html.contains("curl -X POST"))
+        assertTrue(html.contains("--data-urlencode"))
+        assertTrue(html.contains("example.com/share/xxxx"))
+        // 命令行里的地址是电视内置服务器地址，不带共享密钥
+        assertTrue(html.contains("/link'"))
+    }
+
+    @Test
     fun `POST with a valid share link is accepted`() {
         val link = "https://p.example.com:9070/share/abcdefghijKLMN"
         val (code, html) = post("/link", "link=" + URLEncoder.encode(link, "UTF-8"))
@@ -83,6 +113,35 @@ class ShareLinkServerTest {
         val (code, html) = post("/link", "link=not%20a%20link")
         assertEquals(400, code)
         assertTrue(html.contains("发送失败"))
+    }
+
+    @Test
+    fun `POST with valid link but validation failure shows the real reason`() {
+        ShareLinkServer.onLinkReceived = { false }
+        ImmichClient.lastValidationError = "HTTPS 证书不被电视信任"
+        try {
+            val link = "https://p.example.com:9070/share/abcdefghijKLMN"
+            val (code, html) = post("/link", "link=" + URLEncoder.encode(link, "UTF-8"))
+            assertEquals(500, code)
+            assertTrue(html.contains("发送失败"))
+            assertTrue(html.contains("HTTPS 证书不被电视信任"))
+        } finally {
+            ImmichClient.lastValidationError = ""
+            ShareLinkServer.onLinkReceived = { true }
+        }
+    }
+
+    @Test
+    fun `POST validation failure without a reason falls back to generic text`() {
+        ShareLinkServer.onLinkReceived = { false }
+        try {
+            val link = "https://p.example.com:9070/share/abcdefghijKLMN"
+            val (code, html) = post("/link", "link=" + URLEncoder.encode(link, "UTF-8"))
+            assertEquals(500, code)
+            assertTrue(html.contains("电视端保存失败，请再看一次"))
+        } finally {
+            ShareLinkServer.onLinkReceived = { true }
+        }
     }
 
     @Test

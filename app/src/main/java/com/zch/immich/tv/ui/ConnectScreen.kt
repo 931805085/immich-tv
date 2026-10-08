@@ -4,16 +4,20 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,11 +25,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
+import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.zch.immich.tv.data.SettingsStore
 import com.zch.immich.tv.data.ShareLinkEntry
@@ -47,6 +57,8 @@ fun ConnectScreen(settings: SettingsStore, onUseLink: (String) -> Boolean) {
     var history by remember { mutableStateOf(settings.shareLinks()) }
     var input by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    // 等待用户确认删除的历史条目；非空时弹出确认对话框
+    var pendingDelete by remember { mutableStateOf<ShareLinkEntry?>(null) }
 
     fun reloadHistory() {
         history = settings.shareLinks()
@@ -114,8 +126,11 @@ fun ConnectScreen(settings: SettingsStore, onUseLink: (String) -> Boolean) {
                                     )
                                     Text(
                                         entry.url,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        // 尽量少占空间：小号字 + 单行截断，不给 URL 换行
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.45f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
                                 }
                                 TvButton(onClick = {
@@ -127,9 +142,7 @@ fun ConnectScreen(settings: SettingsStore, onUseLink: (String) -> Boolean) {
                                     }
                                 }) { Text("使用") }
                                 TvButton(onClick = {
-                                    settings.removeShareLink(entry.url)
-                                    if (settings.currentShareLink == entry.url) settings.currentShareLink = ""
-                                    reloadHistory()
+                                    pendingDelete = entry
                                 }) { Text("删除") }
                             }
                         }
@@ -184,4 +197,86 @@ fun ConnectScreen(settings: SettingsStore, onUseLink: (String) -> Boolean) {
             }
         }
     }
+
+    // 删除确认对话框：叠在页面之上，等用户确认后才真正删除
+    val toDelete = pendingDelete
+    if (toDelete != null) {
+        ConfirmDeleteDialog(
+            entry = toDelete,
+            onConfirm = {
+                settings.removeShareLink(toDelete.url)
+                if (settings.currentShareLink == toDelete.url) settings.currentShareLink = ""
+                reloadHistory()
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null },
+        )
+    }
+}
+
+/**
+ * 历史链接删除确认框。
+ *
+ * tv-material 1.x 没有现成的 AlertDialog，这里用 compose-ui 的 [Dialog] 弹一层
+ * 独立窗口：背景自动压暗，内容用 Surface 仿 AlertDialog 的版式（标题 + 说明 + 操作区）。
+ * 按钮直接用 [TvButton]（触屏 + 遥控器都可操作），默认聚焦「取消」避免误删。
+ */
+@Composable
+@OptIn(ExperimentalTvMaterial3Api::class)
+private fun ConfirmDeleteDialog(
+    entry: ShareLinkEntry,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    // 初始焦点放到「取消」上：遥控器按确定/回车默认就是取消，防误删
+    val cancelFocus = remember { FocusRequester() }
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            modifier = Modifier.widthIn(max = 560.dp),
+            shape = RoundedCornerShape(20.dp),
+            colors = SurfaceDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 28.dp, vertical = 24.dp)) {
+                Text(
+                    "删除这条共享链接？",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    entry.albumName.ifBlank { "共享相册" },
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
+                )
+                Text(
+                    entry.url,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    "删除后需重新扫码或手动输入才能恢复",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(top = 12.dp),
+                )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .padding(top = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    TvButton(
+                        onClick = onDismiss,
+                        modifier = Modifier.focusRequester(cancelFocus),
+                    ) { Text("取消") }
+                    TvButton(onClick = onConfirm) { Text("删除") }
+                }
+            }
+        }
+    }
+    // 等对话框内容组合完成后，把焦点交给「取消」按钮
+    LaunchedEffect(Unit) { cancelFocus.requestFocus() }
 }

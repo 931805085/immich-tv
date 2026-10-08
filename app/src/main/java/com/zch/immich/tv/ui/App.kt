@@ -105,52 +105,57 @@ fun App() {
 
     MaterialTheme(colorScheme = darkColorScheme()) {
         Surface(modifier = Modifier.fillMaxSize()) {
-            when (val s = screen) {
-                is Screen.Connect -> ConnectScreen(
-                    settings = settings,
-                    onUseLink = { link ->
-                        if (applyShareLink(link)) {
-                            rememberShareLink(settings)
-                            goHome(true)
-                            true
-                        } else {
-                            false
-                        }
-                    },
-                )
-                is Screen.Home -> Box(modifier = Modifier.fillMaxSize()) {
-                    HomeScreen(
-                        generation = s.generation,
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (val s = screen) {
+                    is Screen.Connect -> ConnectScreen(
                         settings = settings,
-                        onOpenAsset = { assets, index -> viewer = ViewerRoute(assets, index) },
-                        onSwitchLink = {
-                            viewer = null
-                            screen = Screen.Connect
+                        onUseLink = { link ->
+                            if (applyShareLink(link)) {
+                                rememberShareLink(settings)
+                                goHome(true)
+                                true
+                            } else {
+                                false
+                            }
                         },
-                        locateRequest = locate,
                     )
-
-                    // 预览页叠在列表之上：列表保持组合状态，返回即恢复，不用重新拉取相册
-                    val v = viewer
-                    if (v != null) {
-                        ViewerScreen(
-                            assets = v.assets,
-                            startIndex = v.startIndex,
-                            startPaused = v.startPaused,
-                            // 图片页翻到视频、或播放器按左右翻到图片，都从这里换页面。
-                            // 第二个参数带上调用方的暂停状态：播放器暂停时翻出去就保持暂停，
-                            // 图片页翻到视频时传 false（反向不继承）。
-                            onNavigateTo = { index, keepPaused ->
-                                viewer = ViewerRoute(v.assets, index, keepPaused)
-                            },
-                            onClose = { index ->
+                    is Screen.Home -> Box(modifier = Modifier.fillMaxSize()) {
+                        HomeScreen(
+                            generation = s.generation,
+                            settings = settings,
+                            onOpenAsset = { assets, index -> viewer = ViewerRoute(assets, index) },
+                            onSwitchLink = {
                                 viewer = null
-                                locateSeq++
-                                locate = LocateRequest(locateSeq, index)
+                                screen = Screen.Connect
                             },
+                            locateRequest = locate,
                         )
+
+                        // 预览页叠在列表之上：列表保持组合状态，返回即恢复，不用重新拉取相册
+                        val v = viewer
+                        if (v != null) {
+                            ViewerScreen(
+                                assets = v.assets,
+                                startIndex = v.startIndex,
+                                startPaused = v.startPaused,
+                                // 图片页翻到视频、或播放器按左右翻到图片，都从这里换页面。
+                                // 第二个参数带上调用方的暂停状态：播放器暂停时翻出去就保持暂停，
+                                // 图片页翻到视频时传 false（反向不继承）。
+                                onNavigateTo = { index, keepPaused ->
+                                    viewer = ViewerRoute(v.assets, index, keepPaused)
+                                },
+                                onClose = { index ->
+                                    viewer = null
+                                    locateSeq++
+                                    locate = LocateRequest(locateSeq, index)
+                                },
+                            )
+                        }
                     }
                 }
+
+                // 自动更新宿主：启动时静默查 GitHub 最新版，有新版本弹提示下载安装
+                UpdateCheckHost()
             }
         }
     }

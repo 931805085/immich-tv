@@ -50,6 +50,7 @@
 - **视频预读 + 磁盘缓存**：播放走 CacheDataSource 流式落盘（128MB~2GB，按可用空间自适应），切回去直接从磁盘起播；**当前视频播放时后台预读「下一个视频」的前 8MB**，切过去秒开；
 - **预览期间禁止休眠**：看幻灯片/视频时画面不熄灭，退出恢复系统策略；
 - **返回定位**：预览/播放返回后，列表自动滚回那张照片所在日期与列，不重新拉取相册；
+- **自动更新**：启动时静默检查 GitHub Release 最新版（版本号高于当前则提示），一键下载（带进度）+ 调系统安装器；发布物直接是 APK
 - **连接页**：扫码二维码 + 历史共享链接（最多 20 条，带相册名）+ 电视上手动输入；
 - **崩溃诊断**：崩溃栈写文件，手机浏览器打开 `http://电视IP:端口/debug` 即可查看。
 
@@ -113,9 +114,18 @@ app/src/main/java/com/zch/immich/tv/
 - `ParseShareLinkTest`（8）：共享链接解析边界（带逗号、缺协议、带 query、`/api/share/` 前缀等）；
 - `TimelineBucketAssetsDtoTest`（4）：列式 JSON 反序列化回归（曾经因 `ratio` 类型声明错误导致整相册加载失败）。
 
-## 自动构建（GitHub Actions）
+## 自动构建与一键发布（GitHub Actions）
 
-推代码到 `main` 后，GitHub 会自动编译并生成正式签名的 release APK（公开仓库用 Actions 免费）；打 `v*` 标签（如 `v1.0.0`）时会自动发布带 APK 的 GitHub Release。PR 只构建 debug 包做基本校验。
+推代码到 `main` 后，GitHub 会自动编译并生成正式签名的 release APK 作为 Actions artifact（`build-apk.yml`）；PR 只构建 debug 包做基本校验。
+
+**发新版用「一键发布」**（Actions 页面 → 一键发布 → Run workflow → 填版本号，如 `1.1.0`）：
+- 自动用 `-PversionName=1.1.0` 构建正式签名 release APK（versionCode 由版本号推导：`major*10000 + minor*100 + patch`，保证每次发版递增，自动更新才能安装）；
+- 自动打 `v1.1.0` 标签并创建 GitHub Release，**直接把 APK 挂上去**（不再产生 zip）；
+- 发布成功后电视上的自动更新会检测到新版本。
+
+也可以走传统方式：`git tag v1.1.0 && git push`（`release.yml` 的 push tags 分支会完成同样的构建+发布）。
+
+> 已有的旧发布物（`1.0.0` 只有 `immich-tv-apk.zip`）自动更新也能处理：下载后自动解出里面的 APK 再安装。
 
 配置签名（一次性）：
 
@@ -136,11 +146,11 @@ app/src/main/java/com/zch/immich/tv/
 
    > 旧版 JKS 格式才有「storepass / keypass」两道口令；现代 JDK 生成的 keystore 一道就够。签名时报 `Keystore was tampered with, or password was incorrect` 基本是 `KEYSTORE_PASSWORD` 或 base64 内容有问题。
 
-3. 之后每次 push 到 `main` 自动出 APK（Actions 页面可下载）。**密钥只放 Secrets、别提交进仓库**；本地没配环境变量时 `assembleRelease` 会报缺签名信息（预期行为），日常开发用 `assembleDebug` 即可。
+3. **密钥只放 Secrets、别提交进仓库**；本地没配环境变量时 `assembleRelease` 会报缺签名信息（预期行为），日常开发用 `assembleDebug` 即可。
 
 ## 路线图 / 已知缺口
 
-**已完成**：扫码连接、按天时间线 + 年份跳转、流式加载 + 重试、全屏幻灯片、图文混排视频播放、崩溃诊断、返回定位。
+**已完成**：扫码连接、按天时间线 + 年份跳转、流式加载 + 重试、全屏幻灯片、图文混排视频播放、崩溃诊断、返回定位、自动更新。
 
 **下一步候选**（按价值排序）：
 

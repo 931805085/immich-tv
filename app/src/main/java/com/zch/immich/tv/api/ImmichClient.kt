@@ -1,14 +1,19 @@
 package com.zch.immich.tv.api
 
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import retrofit2.HttpException
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
+import java.io.IOException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
 
 /**
  * 一个已解析的共享链接：如 https://example.com/share/aBcD123
@@ -109,11 +114,34 @@ object ImmichClient {
                 // 如果服务器域名解析不出来，runBlocking 会一直挂着，
                 // 把 POST /link 的响应拖到 60s+。15s 够了，够了还不回就判失败。
                 withTimeout(15_000L) { apiForShare().getSharedLinkMe(shareKey) }
+                lastValidationError = ""
                 true
             } catch (e: Exception) {
+                // 把真实失败原因记下来，手机的反馈页能显示出来，而不是泛泛的"再看一次"
+                lastValidationError = describeValidationError(e)
                 false
             }
         }
+
+    /** 最近一次 [validateShareLink] 失败的原因；成功时为 ""（internal set 便于单元测试注入） */
+    @Volatile
+    var lastValidationError: String = ""
+        internal set
+
+    private fun describeValidationError(e: Exception): String = when (e) {
+        is TimeoutCancellationException ->
+            "连接服务器超时（15 秒内未响应），请检查电视与服务器网络，可稍后重试"
+        is SSLException ->
+            "HTTPS 证书不被电视信任（可能用了自签名/内网证书），请改用官方证书或直接使用 http:// 地址"
+        is UnknownHostException ->
+            "无法解析服务器域名，电视可能访问不到这台服务器（手机和电视需要在同一网络）"
+        is HttpException ->
+            "服务器返回 HTTP ${e.code()}，链接可能无效或已过期"
+        is IOException ->
+            "网络请求失败：${e.message ?: e.javaClass.simpleName}"
+        else ->
+            e.message ?: e.javaClass.simpleName
+    }
 
     // ---------- HTTP 客户端 ----------
 

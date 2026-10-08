@@ -1,5 +1,18 @@
 import java.util.Base64
 
+// CI 发布时用 -PversionName=1.1.0 注入版本号；本地开发默认 1.0.0。
+// versionCode 由版本号推导（major*10000 + minor*100 + patch），保证每次发版单调递增
+// ——自动更新走系统安装器，versionCode 不比已装版本高会被判“降级”装不上。
+val injectedVersionName: String? = (findProperty("versionName") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+
+fun versionCodeOf(version: String): Int {
+    val parts = version.trim().removePrefix("v").removePrefix("V").split(".").mapNotNull { it.toIntOrNull() }
+    val major = parts.getOrElse(0) { 0 }
+    val minor = parts.getOrElse(1) { 0 }
+    val patch = parts.getOrElse(2) { 0 }
+    return major * 10000 + minor * 100 + patch
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -18,8 +31,9 @@ android {
         // 电视桌面（小米 tvhome）按 versionCode 缓存应用图标：
         // 版本不变时即使 adb install -r 重装也不会刷新，界面上仍是旧图标。
         // 换了图标资源必须一起抬版本号，否则用户看不到效果。
-        versionCode = 1
-        versionName = "1.0.0"
+        // CI 发布经 -PversionName 注入版本号并推导 versionCode，本地开发固定 1 / 1.0.0。
+        versionCode = if (injectedVersionName != null) versionCodeOf(injectedVersionName) else 1
+        versionName = injectedVersionName ?: "1.0.0"
     }
 
     signingConfigs {
@@ -64,6 +78,12 @@ android {
 
     buildFeatures {
         compose = true
+    }
+
+    testOptions {
+        // 单测里 android.util.Log 返回默认值而不是抛异常；
+        // 避免日志调用把真实异常掩盖掉（GitHubUpdater 失败路径会打 Log.w）
+        unitTests.isReturnDefaultValues = true
     }
 }
 

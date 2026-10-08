@@ -168,12 +168,15 @@ object ShareLinkServer {
             return
         }
         val ok = onLinkReceived?.invoke(link) ?: false
+        // 失败时把真实原因带给手机，而不是泛泛的"再看一次"；
+        // 原因来自 ImmichClient.validateShareLink 的记录，未记录时给兜底文案。
+        val reason = if (ok) "" else ImmichClient.lastValidationError.ifBlank { "电视端保存失败，请再看一次" }
         respond(
             socket,
             if (ok) 200 else 500,
             if (ok) "OK" else "Internal Server Error",
             CONTENT_TYPE_HTML,
-            resultPage(ok, link, if (ok) "" else "电视端保存失败，请再看一次"),
+            resultPage(ok, link, reason),
         )
     }
 
@@ -196,7 +199,11 @@ object ShareLinkServer {
 
     /** 手机扫码后看到的输入页 */
     private fun inputPage(): String {
-        val current = ImmichClient.currentShareLinkUrl().ifBlank { "" }
+        // 故意不预填当前共享链接：链接里带着 share key 令牌，预填会把当前链接
+        // 暴露给任何一个扫码打开这个页面的人，属于个人信息泄露。
+        // 需要换相册时手动粘贴/输入即可，或者用下面的 curl 命令行推送。
+        val curlBase = serverUrl.ifBlank { "http://电视IP:端口/" }
+        val curlCmd = "curl -X POST '${curlBase}link' --data-urlencode 'link=https://example.com/share/xxxx'"
         return """<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -213,6 +220,9 @@ code{background:#0f1115;padding:2px 6px;border-radius:6px;font-size:13px}
 input{width:100%;box-sizing:border-box;font-size:17px;padding:15px;border-radius:10px;border:1px solid #3a4048;background:#0f1115;color:#f5f5f5;margin-top:16px}
 button{width:100%;box-sizing:border-box;font-size:18px;font-weight:600;padding:16px;border:0;border-radius:10px;background:#3A7BFF;color:#fff;margin-top:14px}
 button:disabled{background:#555}
+details{margin-top:16px;border-top:1px solid #2a2f37;padding-top:12px}
+summary{color:#9aa0a6;font-size:13px;cursor:pointer;margin-bottom:8px}
+.codeblock{display:block;background:#0f1115;border:1px solid #3a4048;border-radius:8px;padding:12px;font-size:13px;line-height:1.6;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0 0}
 .tiny{color:#6b7075;font-size:12px;margin-top:16px;text-align:center}
 </style>
 </head>
@@ -221,9 +231,14 @@ button:disabled{background:#555}
 <h1>&#128250; Immich TV · 输入共享链接</h1>
 <p class="hint">下面这台电视正在等待共享链接。请粘贴 Immich 的共享链接，形如 <code>https://服务器/share/xxxx</code></p>
 <form method="post" action="/link">
-<input name="link" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://example.com/share/xxxx" value="${escapeHtml(current)}">
+<input name="link" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://example.com/share/xxxx">
 <button type="submit">发送到电视</button>
 </form>
+<details>
+<summary>手机浏览器打不开？还可以用命令行推送</summary>
+<p class="hint">在能访问这台电视的电脑终端里执行（把链接换成你想发送的）：</p>
+<code class="codeblock">${escapeHtml(curlCmd)}</code>
+</details>
 <p class="tiny">仅在本机局域网内使用，链接不会经过任何第三方</p>
 </div>
 </body>
@@ -277,7 +292,9 @@ h1{font-size:23px;margin:0 0 10px;line-height:1.4}
     private fun debugText(): String {
         val report = debugReportProvider?.invoke()
         if (report.isNullOrBlank()) {
-            return "没有崩溃记录。\n\n当前状态: running=$running port=$boundPort host=$localIp\n"
+            val err = ImmichClient.lastValidationError
+            val tail = if (err.isNotBlank()) "\n最近一次链接校验失败原因: $err" else ""
+            return "没有崩溃记录。\n\n当前状态: running=$running port=$boundPort host=$localIp\n$tail"
         }
         return report
     }
