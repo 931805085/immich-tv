@@ -1,45 +1,62 @@
-# 一键发布：Actions 页面手动运行，填版本号即可打出正式签名的 release APK，
-# 自动创建 v<版本> 标签并直接挂到 GitHub Release（资产是 APK 本体，不产生 zip）。
-# 也可以用命令行触发：git tag v1.1.0 && git push（本流程的 push tags 分支也能发布）。
+# 构建与一键发布（一个 workflow 干两件事，构建步骤只维护一份，避免和发布流程重复）
 #
-# 注意：一键发布用 softprops 创建 v* 标签时会再触发一次本流程（push tags），
-# 所以第一步先查「该 tag 是否已有 release」，已存在就直接跳过，避免重复构建/发布。
-name: 一键发布
+# 触发时机与行为：
+#   - pull_request → 只构建 debug APK 做基本校验（PR 门禁，不签名）
+#   - push 到 main / workflow_dispatch（不填版本号）→ 构建正式签名 release APK 并上传 artifact
+#   - 打 v* 标签（如 v1.1.0）→ 构建并发布带 APK 的 GitHub Release（直接挂 APK，不产生 zip）
+#   - workflow_dispatch 填版本号（如 1.1.0）→ 一键发布：构建 + 自动打 v 标签 + 发布
+#
+# 一键发布用 softprops 创建 v* 标签时会再次触发本流程（push tags），
+# 所以先查「该 tag 是否已有 release」，已有就整段跳过（连构建都不跑），避免重复构建/发布。
+name: 构建与一键发布
 
 on:
+  push:
+    branches: ["main"]
+    tags: ["v*"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       version:
-        description: "要发布的版本号（如 1.1.0）。会自动打 v1.1.0 标签并发布带 APK 的 GitHub Release"
-        required: true
+        description: "要发布的版本号（如 1.1.0）。填了会自动打 v1.1.0 标签并发布带 APK 的 GitHub Release；不填只构建不发布"
+        required: false
         type: string
-  push:
-    tags: ["v*"]
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 解析版本号与标签
+      - name: 解析版本号与发布模式
         id: version
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            v="${{ inputs.version }}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.version }}" ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "tag=v${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_type }}" == "tag" ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
           else
-            v="${GITHUB_REF_NAME#v}"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "tag=" >> "$GITHUB_OUTPUT"
           fi
-          echo "version=${v}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${v}" >> "$GITHUB_OUTPUT"
 
-      - name: 该标签已有 release 则跳过（一键发布推标签会再次触发本流程）
+      - name: 该 tag 已有 release 则跳过（一键发布推标签会再次触发本流程）
         id: check
         run: |
+          if [[ "${{ steps.version.outputs.release }}" != "true" ]]; then
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           if gh release view "${{ steps.version.outputs.tag }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
@@ -49,33 +66,56 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Set up JDK 17
-        if: steps.check.outputs.exists == 'false'
+        if: steps.check.outputs.exists != 'true'
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Android SDK
-        if: steps.check.outputs.exists == 'false'
+        if: steps.check.outputs.exists != 'true'
+        # v4+ 不再安装已废弃的 tools 包（Google 2026-09 起停止提供）。显式 packages
+        # 装平台 36 + build-tools，其余缺的组件 AGP 会自动下载（licenses 由该 action 接受）。
         uses: android-actions/setup-android@v4
         with:
           packages: "platform-tools platforms;android-36 build-tools;36.0.0"
 
       - name: Set up Gradle（缓存依赖）
-        if: steps.check.outputs.exists == 'false'
+        if: steps.check.outputs.exists != 'true'
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build release APK（注入版本号，versionCode 随版本自动递增）
-        if: steps.check.outputs.exists == 'false'
+      - name: Build APK（正式签名，发布时注入版本号）
+        if: steps.check.outputs.exists != 'true'
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease -PversionName=${{ steps.version.outputs.version }} --no-daemon
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # PR 不触发签名，只编 debug 验证
+            ./gradlew :app:assembleDebug --no-daemon
+          elif [[ "${{ steps.version.outputs.release }}" == "true" ]]; then
+            # 发布：注入版本号（versionCode 随版本自动递增），正式签名后挂到 Release
+            ./gradlew :app:assembleRelease -PversionName=${{ steps.version.outputs.version }} --no-daemon
+          else
+            # push main / 手动构建：正式签名（需要 4 个 Secrets）
+            ./gradlew :app:assembleRelease --no-daemon
+          fi
+
+      - name: Upload APK artifact
+        if: steps.check.outputs.exists != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: immich-tv-apk
+          # PR 时只有 debug、其余情况只有 release，匹配不到的类型自动跳过（warn）
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+          if-no-files-found: warn
 
       - name: Publish GitHub Release（直接挂 APK）
-        if: steps.check.outputs.exists == 'false'
+        if: steps.check.outputs.exists != 'true' && steps.version.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}

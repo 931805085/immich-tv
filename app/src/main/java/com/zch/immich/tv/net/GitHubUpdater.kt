@@ -24,7 +24,7 @@ import okhttp3.Request
 /**
  * 自动更新：检查 GitHub Release 里有没有比当前更新的版本，有就下载并调系统安装器。
  *
- * 发布物兼容两种形态（见 .github/workflows/build-apk.yml）：
+ * 发布物兼容两种形态（见 .github/workflows/release.yml）：
  *  - 直接发布 `*.apk`（softprops/action-gh-release 的 files 字段）；
  *  - 只上传了 workflow artifact 打包的 `*.zip`（里面再装 apk）——当前仓库实际是这种，
  *    所以下载后如果是 zip 就解出里面的 .apk 再安装。

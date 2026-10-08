@@ -116,14 +116,15 @@ app/src/main/java/com/zch/immich/tv/
 
 ## 自动构建与一键发布（GitHub Actions）
 
-推代码到 `main` 后，GitHub 会自动编译并生成正式签名的 release APK 作为 Actions artifact（`build-apk.yml`）；PR 只构建 debug 包做基本校验。
+构建与发布都在这一个 workflow 里（`.github/workflows/release.yml`），构建步骤只维护一份：
 
-**发新版用「一键发布」**（Actions 页面 → 一键发布 → Run workflow → 填版本号，如 `1.1.0`）：
-- 自动用 `-PversionName=1.1.0` 构建正式签名 release APK（versionCode 由版本号推导：`major*10000 + minor*100 + patch`，保证每次发版递增，自动更新才能安装）；
-- 自动打 `v1.1.0` 标签并创建 GitHub Release，**直接把 APK 挂上去**（不再产生 zip）；
-- 发布成功后电视上的自动更新会检测到新版本。
-
-也可以走传统方式：`git tag v1.1.0 && git push`（`release.yml` 的 push tags 分支会完成同样的构建+发布）。
+- **PR**：只构建 debug APK 做基本校验（PR 门禁，不签名）；
+- **push 到 `main`**：构建正式签名 release APK 作为 Actions artifact；
+- **发新版用「一键发布」**（Actions 页面 → 构建与一键发布 → Run workflow → 填版本号，如 `1.1.0`）：
+  - 自动用 `-PversionName=1.1.0` 构建正式签名 release APK（versionCode 由版本号推导：`major*10000 + minor*100 + patch`，保证每次发版递增，自动更新才能安装）；
+  - 自动打 `v1.1.0` 标签并创建 GitHub Release，**直接把 APK 挂上去**（不再产生 zip）；
+  - 发布成功后电视上的自动更新会检测到新版本。
+- 也可以走传统方式：`git tag v1.1.0 && git push`（标签触发的分支会完成同样的构建+发布）。
 
 > 已有的旧发布物（`1.0.0` 只有 `immich-tv-apk.zip`）自动更新也能处理：下载后自动解出里面的 APK 再安装。
 
